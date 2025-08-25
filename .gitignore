@@ -1,0 +1,17 @@
+# 가상환경
+venv/
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE 환경파일 (IntelliJ, VSCode 등)
+.idea/
+.vscode/
+*.iml
+
+# OS 자동 생성 파일
+.DS_Store
+Thumbs.db
