@@ -8,7 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 
 # 파이썬 라이브러리
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 && \
+    pip install --no-cache-dir transformers==4.45.2 fastapi==0.116.1 uvicorn==0.35.0 huggingface-hub==0.24.6
 
 # 앱 복사
 COPY . .
