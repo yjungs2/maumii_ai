@@ -18,8 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 빌드 타임에 모델 내려받아 이미지에 포함
-RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='yjungs2/trained_klueBERT', local_dir='/app/model', local_dir_use_symlinks=False)"
+# ⬇️ 인라인 대신 스크립트로 스냅샷
+COPY download_model.py .
+RUN python download_model.py && rm download_model.py
 
 COPY src ./src
 
