@@ -5,6 +5,9 @@ ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/app/hf \
     TRANSFORMERS_CACHE=/app/hf \
     MODEL_DIR=/app/model \
+    HF_HUB_OFFLINE=1 \
+    OMP_NUM_THREADS=1 \
+    TOKENIZERS_PARALLELISM=false \
     PORT=8080
 
 WORKDIR /app
@@ -15,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 🔽 빌드 타임에 모델 스냅샷
+# 빌드 타임에 모델 내려받아 이미지에 포함
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='yjungs2/trained_klueBERT', local_dir='/app/model', local_dir_use_symlinks=False)"
 
 COPY src ./src
