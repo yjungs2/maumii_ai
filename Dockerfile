@@ -1,17 +1,24 @@
 FROM python:3.12-slim
 
-# 작업 디렉토리
 WORKDIR /app
 
-# 시스템 라이브러리 (PyTorch 설치시 필요)
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# (선택) 시스템 패키지
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/*
 
-# 파이썬 라이브러리 설치
+# 파이썬 라이브러리
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 앱 복사
 COPY . .
 
-# FastAPI 실행 (Uvicorn)
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Cloud Run이 넣어주는 PORT 사용 (기본 8080)
+ENV PORT=8080
+EXPOSE 8080
+
+# JSON 배열에서 $PORT 확장 안 됨 → shell 형태로 실행해야 함
+# app 모듈명이 main.py면 main:app, app.py면 app:app 로 맞춰주세요.
+CMD exec uvicorn app:app --host 0.0.0.0 --port ${PORT}
+# 또는
+# CMD ["sh","-c","uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}"]
