@@ -6,6 +6,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
+#===== 전역 설정 =====
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "8"))        # 기본 8, 실험 A에서 10으로
+SEM = asyncio.Semaphore(int(os.getenv("SEM_LIMIT", "2")))  # 기본 2, 실험 B에서 1로
+
 logger = logging.getLogger("uvicorn")
 
 app = FastAPI(title="Emotion Classification API")
@@ -97,7 +101,12 @@ async def analyze_batch(req: BatchRequest):
     async with SEM:
         logger.info(f"[START pid={os.getpid()} rid={rid}] sem={SEM._value}")
         t0 = time.perf_counter()
-        raw = await asyncio.to_thread(clf, req.texts, batch_size=8, truncation=True)
+        raw = await asyncio.to_thread(
+            clf,
+            req.texts,
+            batch_size=min(BATCH_SIZE, max(1, len(req.texts))),  # 요청개수보다 클 수 없게
+            truncation=True
+        )
         dt = time.perf_counter() - t0
         logger.info(f"[DONE  pid={os.getpid()} rid={rid}] took={dt:.2f}s sem={SEM._value}")
 

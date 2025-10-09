@@ -2,8 +2,9 @@ import asyncio
 import httpx
 import time
 
-URL = "http://localhost:8000/analyze/batch"
+URL = "https://maumii-ai-43895739287.us-central1.run.app/analyze"
 BATCH_SIZE = 10
+CONCURRENCY = 30
 TEXTS = [ 
     "오늘은 정말 즐거운 하루야",
     "너무 화가 나서 참기 힘들어",
