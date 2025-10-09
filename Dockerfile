@@ -30,4 +30,4 @@ COPY src ./src
 EXPOSE 8080
 
 # uvicorn 실행 (PORT 환경변수 사용)
-CMD ["sh","-c","uvicorn src.app:app --host 0.0.0.0 --port ${PORT:-8080} --workers 2 --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh","-c","uvicorn src.app:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips='*'"]

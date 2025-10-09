@@ -120,7 +120,7 @@ async def one_call(client, idx, text):
     ok = False
     try:
         data = resp.json()
-        ok = resp.status_code == 200 and "label" in data
+        ok = (resp.status_code == 200) and ("label" in data)
     except Exception:
         data = {"status": resp.status_code, "body": await resp.aread()}
     return ok, dt, resp.status_code
@@ -133,16 +133,19 @@ async def main():
     total_dt = time.perf_counter() - total_t0
 
     ok_cnt = sum(1 for ok, _, _ in results if ok)
-    p50 = sorted(r[1] for r in results)[int(0.50*len(results))-1]
-    p90 = sorted(r[1] for r in results)[int(0.90*len(results))-1]
-    p99 = sorted(r[1] for r in results)[int(0.99*len(results))-1]
+    lats = sorted(r[1] for r in results)
+    p50 = lats[int(0.50*len(lats)) - 1]
+    p90 = lats[int(0.90*len(lats)) - 1]
+    p99 = lats[int(0.99*len(lats)) - 1]
+
     print(f"총 {TOTAL_REQUESTS}건, 동시성 {CONCURRENCY}")
     print(f"성공 {ok_cnt} / 실패 {TOTAL_REQUESTS-ok_cnt}")
     print(f"총 소요 {total_dt:.2f}s, RPS≈ {TOTAL_REQUESTS/total_dt:.1f}")
     print(f"지연 p50={p50:.2f}s p90={p90:.2f}s p99={p99:.2f}s")
+
     codes = {}
-    for _,_,code in results:
-        codes[code] = codes.get(code,0)+1
+    for *_, code in results:
+        codes[code] = codes.get(code, 0) + 1
     print("HTTP codes:", codes)
 
 if __name__ == "__main__":
