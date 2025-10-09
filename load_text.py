@@ -2,9 +2,11 @@ import asyncio
 import httpx
 import time
 
-URL = "https://maumii-ai-43895739287.us-central1.run.app/analyze"
-BATCH_SIZE = 10
-CONCURRENCY = 30
+
+URL = "https://maumii-ai-43895739287.us-central1.run.app/analyze"  # 단건
+CONCURRENCY = 100            # 동시에 날릴 최대 HTTP 요청 수
+TOTAL_REQUESTS = 1000       # 총 요청 수
+
 TEXTS = [ 
     "오늘은 정말 즐거운 하루야",
     "너무 화가 나서 참기 힘들어",
@@ -108,29 +110,40 @@ TEXTS = [
     "사랑하는 사람을 만나서 행복하다."
 ]*10 # 100개 데이터
 
-async def send_batch(client, texts, idx):
-    start = time.time()
-    resp = await client.post(URL, json={"texts": texts})
-    elapsed = time.time() - start
+sem = asyncio.Semaphore(CONCURRENCY)
+
+async def one_call(client, idx, text):
+    t0 = time.perf_counter()
+    async with sem:
+        resp = await client.post(URL, json={"text": text})
+    dt = time.perf_counter() - t0
+    ok = False
     try:
         data = resp.json()
+        ok = resp.status_code == 200 and "label" in data
     except Exception:
-        data = {"error": resp.status_code, "body": resp.text}
-    return elapsed, data
+        data = {"status": resp.status_code, "body": await resp.aread()}
+    return ok, dt, resp.status_code
 
 async def main():
-    total_start = time.time()
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        tasks = []
-        for i in range(0, len(TEXTS), BATCH_SIZE):
-            batch = TEXTS[i:i+BATCH_SIZE]
-            tasks.append(send_batch(client, batch, i//BATCH_SIZE + 1))
+    total_t0 = time.perf_counter()
+    async with httpx.AsyncClient(timeout=30) as client:
+        tasks = [one_call(client, i, TEXTS[i % len(TEXTS)]) for i in range(TOTAL_REQUESTS)]
         results = await asyncio.gather(*tasks)
-    total_elapsed = time.time() - total_start
+    total_dt = time.perf_counter() - total_t0
 
-    for i, (elapsed, data) in enumerate(results, 1):
-        print(f"Batch {i}: {elapsed:.2f}s → {len(data.get('results', []))}개 처리")
+    ok_cnt = sum(1 for ok, _, _ in results if ok)
+    p50 = sorted(r[1] for r in results)[int(0.50*len(results))-1]
+    p90 = sorted(r[1] for r in results)[int(0.90*len(results))-1]
+    p99 = sorted(r[1] for r in results)[int(0.99*len(results))-1]
+    print(f"총 {TOTAL_REQUESTS}건, 동시성 {CONCURRENCY}")
+    print(f"성공 {ok_cnt} / 실패 {TOTAL_REQUESTS-ok_cnt}")
+    print(f"총 소요 {total_dt:.2f}s, RPS≈ {TOTAL_REQUESTS/total_dt:.1f}")
+    print(f"지연 p50={p50:.2f}s p90={p90:.2f}s p99={p99:.2f}s")
+    codes = {}
+    for _,_,code in results:
+        codes[code] = codes.get(code,0)+1
+    print("HTTP codes:", codes)
 
-    print(f"\n전체 1000개 요청 완료 시간: {total_elapsed:.2f}s")
-
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
