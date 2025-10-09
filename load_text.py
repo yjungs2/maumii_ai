@@ -109,39 +109,43 @@ TEXTS = [
     "불쾌한 장면을 보고 눈살이 찌푸려졌다.",
     "사랑하는 사람을 만나서 행복하다."
 ]*10 # 100개 데이터
-
-sem = asyncio.Semaphore(CONCURRENCY)
-
-async def one_call(client, idx, text):
+async def one_call(client: httpx.AsyncClient, idx: int, text: str):
     t0 = time.perf_counter()
-    async with sem:
-        resp = await client.post(URL, json={"text": text})
+    resp = await client.post(URL, json={"text": text})
     dt = time.perf_counter() - t0
     ok = False
     try:
         data = resp.json()
         ok = (resp.status_code == 200) and ("label" in data)
     except Exception:
-        data = {"status": resp.status_code, "body": await resp.aread()}
+        pass
     return ok, dt, resp.status_code
 
 async def main():
     total_t0 = time.perf_counter()
-    async with httpx.AsyncClient(timeout=30) as client:
+
+    # 세마포어 없이, httpx 커넥션 풀로 동시성 제한
+    limits = httpx.Limits(
+        max_connections=CONCURRENCY,
+        max_keepalive_connections=CONCURRENCY
+    )
+    timeout = httpx.Timeout(60.0)  # 서버 처리 대기 넉넉히
+    async with httpx.AsyncClient(limits=limits, timeout=timeout, http2=True) as client:
         tasks = [one_call(client, i, TEXTS[i % len(TEXTS)]) for i in range(TOTAL_REQUESTS)]
         results = await asyncio.gather(*tasks)
+
     total_dt = time.perf_counter() - total_t0
 
     ok_cnt = sum(1 for ok, _, _ in results if ok)
     lats = sorted(r[1] for r in results)
-    p50 = lats[int(0.50*len(lats)) - 1]
-    p90 = lats[int(0.90*len(lats)) - 1]
-    p99 = lats[int(0.99*len(lats)) - 1]
+    def pct(p):
+        i = max(0, min(len(lats)-1, int(p*len(lats)) - 1))
+        return lats[i] if lats else 0.0
 
     print(f"총 {TOTAL_REQUESTS}건, 동시성 {CONCURRENCY}")
     print(f"성공 {ok_cnt} / 실패 {TOTAL_REQUESTS-ok_cnt}")
     print(f"총 소요 {total_dt:.2f}s, RPS≈ {TOTAL_REQUESTS/total_dt:.1f}")
-    print(f"지연 p50={p50:.2f}s p90={p90:.2f}s p99={p99:.2f}s")
+    print(f"지연 p50={pct(0.50):.2f}s p90={pct(0.90):.2f}s p99={pct(0.99):.2f}s")
 
     codes = {}
     for *_, code in results:
