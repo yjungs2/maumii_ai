@@ -6,10 +6,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
-#===== 전역 설정 =====
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "8"))        # 기본 8, 실험 A에서 10으로
-SEM = asyncio.Semaphore(int(os.getenv("SEM_LIMIT", "2")))  # 기본 2, 실험 B에서 1로
-
 logger = logging.getLogger("uvicorn")
 
 app = FastAPI(title="Emotion Classification API")
@@ -43,8 +39,6 @@ class TextRequest(BaseModel):
 
 class BatchRequest(BaseModel):
     texts: List[str]
-
-SEM = asyncio.Semaphore(2)  # 동시 추론 2개 제한 (메모리 보호)
 
 def _load_model():
     """앱 스타트 직후 백그라운드에서 모델 로딩 (런타임 외부 다운로드 금지)"""
@@ -82,8 +76,8 @@ async def analyze(req: TextRequest):
     if not model_ready:
         raise HTTPException(status_code=503, detail="Model not ready")
 
-    async with SEM:
-        raw = await asyncio.to_thread(clf, req.text, truncation=True)
+    # ⬇️ 세마포어 제거: 요청마다 바로 스레드 실행
+    raw = await asyncio.to_thread(clf, req.text, truncation=True)
     label = raw[0]["label"]
     idx = int(label.replace("LABEL_", "")) if isinstance(label, str) and "LABEL_" in label else int(label)
     return {"label": emotion_labels[idx], "score": raw[0]["score"]}
@@ -96,19 +90,16 @@ async def analyze_batch(req: BatchRequest):
     if not model_ready:
         raise HTTPException(status_code=503, detail="Model not ready")
 
-    rid = id(req)
-    logger.info(f"[ENTER pid={os.getpid()} rid={rid}] sem={SEM._value}")
-    async with SEM:
-        logger.info(f"[START pid={os.getpid()} rid={rid}] sem={SEM._value}")
-        t0 = time.perf_counter()
-        raw = await asyncio.to_thread(
-            clf,
-            req.texts,
-            batch_size=min(BATCH_SIZE, max(1, len(req.texts))),  # 요청개수보다 클 수 없게
-            truncation=True
-        )
-        dt = time.perf_counter() - t0
-        logger.info(f"[DONE  pid={os.getpid()} rid={rid}] took={dt:.2f}s sem={SEM._value}")
+    # ⬇️ 세마포어 제거: 배치도 바로 실행
+    t0 = time.perf_counter()
+    raw = await asyncio.to_thread(
+        clf,
+        req.texts,
+        batch_size=min(int(os.getenv("BATCH_SIZE", "8")), max(1, len(req.texts))),
+        truncation=True
+    )
+    dt = time.perf_counter() - t0
+    logger.info(f"[BATCH DONE] took={dt:.2f}s size={len(req.texts)}")
 
     results = []
     for r in raw:
