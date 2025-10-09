@@ -109,6 +109,7 @@ TEXTS = [
     "불쾌한 장면을 보고 눈살이 찌푸려졌다.",
     "사랑하는 사람을 만나서 행복하다."
 ]*10 # 100개 데이터
+
 async def one_call(client: httpx.AsyncClient, idx: int, text: str):
     t0 = time.perf_counter()
     resp = await client.post(URL, json={"text": text})
@@ -124,18 +125,18 @@ async def one_call(client: httpx.AsyncClient, idx: int, text: str):
 async def main():
     total_t0 = time.perf_counter()
 
-    # 세마포어 없이, httpx 커넥션 풀로 동시성 제한
     limits = httpx.Limits(
         max_connections=CONCURRENCY,
         max_keepalive_connections=CONCURRENCY
     )
-    timeout = httpx.Timeout(60.0)  # 서버 처리 대기 넉넉히
-    async with httpx.AsyncClient(limits=limits, timeout=timeout, http2=True) as client:
+    timeout = httpx.Timeout(60.0)
+
+    # http2 파라미터 제거
+    async with httpx.AsyncClient(limits=limits, timeout=timeout) as client:
         tasks = [one_call(client, i, TEXTS[i % len(TEXTS)]) for i in range(TOTAL_REQUESTS)]
         results = await asyncio.gather(*tasks)
 
     total_dt = time.perf_counter() - total_t0
-
     ok_cnt = sum(1 for ok, _, _ in results if ok)
     lats = sorted(r[1] for r in results)
     def pct(p):
