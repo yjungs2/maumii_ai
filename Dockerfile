@@ -21,7 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 모델 스냅샷 스크립트 (이미지 빌드 시 모델을 /app/model 로 저장)
 COPY download_model.py .
-RUN python download_model.py && rm download_model.py
+RUN HF_HUB_OFFLINE=0 python download_model.py && rm download_model.py
+
 
 # 앱 소스
 COPY src ./src
