@@ -76,7 +76,7 @@ async def analyze(req: TextRequest):
     if not model_ready:
         raise HTTPException(status_code=503, detail="Model not ready")
 
-    # ⬇️ 세마포어 제거: 요청마다 바로 스레드 실행
+    # 세마포어 제거: 요청마다 바로 스레드 실행
     raw = await asyncio.to_thread(clf, req.text, truncation=True)
     label = raw[0]["label"]
     idx = int(label.replace("LABEL_", "")) if isinstance(label, str) and "LABEL_" in label else int(label)
